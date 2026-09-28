@@ -1,5 +1,3 @@
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS orders (
   order_id TEXT PRIMARY KEY,
   tg_user_id TEXT NOT NULL,

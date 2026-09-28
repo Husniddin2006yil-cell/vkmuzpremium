@@ -1,12 +1,12 @@
 # VKMuzPremium — сервер Telegram Stars
 
-Этот отдельный Cloudflare Worker создаёт счета Telegram Stars (`XTR`) для PRO ⭐99 и PREMIUM ⭐299. Подписка автоматически продлевается каждые 30 дней. Доступ включается только после подтверждения Telegram через `successful_payment`. Заказы, платежи и статус подписки хранятся в D1. Команда `/cancel` отключает автопродление, но оплаченный срок сохраняется.
+Этот отдельный Cloudflare Worker создаёт счета Telegram Stars (`XTR`) для PRO ⭐99 и PREMIUM ⭐299. Подписка автоматически продлевается каждые 30 дней. Доступ включается только после подтверждения Telegram через `successful_payment`. Заказы, платежи и статусы хранятся в D1. Команда `/cancel` отключает автопродление, но оплаченный срок сохраняется.
 
-Музыкальная лаборатория и аудиоэффекты Mini App — демонстрационные функции в браузере. Платёж проходит через настоящий поток Telegram Stars только после развёртывания Worker, подключения webhook и настройки адреса Mini App.
+Музыкальная лаборатория и аудиоэффекты Mini App — демонстрационные функции в браузере. Настоящие Stars-платежи заработают только после настройки секрета бота, подключения webhook и публикации Mini App.
 
-## Развёртывание Cloudflare Worker и D1
+## Развёртывание Worker и D1
 
-1. На компьютере с Node.js склонируйте репозиторий и откройте папку Worker:
+1. Установите Node.js и Git, затем выполните:
 
    ```bash
    git clone https://github.com/Husniddin2006yil-cell/vkmuzpremium.git
@@ -14,53 +14,59 @@
    npx wrangler login
    ```
 
-2. Создайте базу D1:
+2. Для Cloudflare-аккаунта этого проекта база `vkmuzpremium_stars` уже создана, а её ID указан в `wrangler.toml`. Если вы развёртываете проект в другом аккаунте, создайте там свою базу:
 
    ```bash
    npx wrangler d1 create vkmuzpremium_stars
    ```
 
-   Замените `REPLACE_WITH_D1_DATABASE_ID` в `wrangler.toml` на выданный `database_id`.
+   Затем замените `database_id` в `wrangler.toml` на новый ID.
 
-3. Загрузите схему в удалённую базу D1:
+3. Создайте таблицы в удалённой D1-базе:
 
    ```bash
-   npx wrangler d1 execute vkmuzpremium_stars --remote --file=schema.sql
+   npx wrangler d1 execute vkmuzpremium_stars --remote --file=./schema.sql
    ```
 
-4. Добавьте токен BotFather как **секрет Worker** — не коммитьте его в GitHub:
+   Используйте `--remote`, чтобы команда выполнялась в Cloudflare, а не в локальной базе.
+
+4. Добавьте **новый, действующий токен бота** как Cloudflare Worker Secret. Не помещайте его в GitHub, исходный код или публичную переменную:
 
    ```bash
    npx wrangler secret put BOT_TOKEN
    ```
 
-   Введите токен в появившемся запросе. Либо откройте Cloudflare Dashboard → Workers & Pages → `vkmuzpremium-stars-payments` → Settings → Variables and Secrets → **Add secret**, имя `BOT_TOKEN`. Локальный `.env` сам по себе не загружается в Cloudflare.
+   Введите токен в запросе Wrangler. Либо откройте Cloudflare Dashboard → Workers & Pages → `vkmuzpremium-stars-payments` → Settings → Variables and Secrets → Add → **Secret**, имя `BOT_TOKEN`. Локальный `.env` сам по себе в Cloudflare не загружается.
 
-5. Разверните Worker:
+5. Опубликуйте Worker:
 
    ```bash
    npx wrangler deploy
    ```
 
-   Ожидаемый адрес: `https://vkmuzpremium-stars-payments.husniddin2006yil.workers.dev`. Если Cloudflare выдаст другой адрес, измените `PAYMENTS_API_URL` в `../app.js` и повторно разверните сайт.
+   Ожидаемый адрес: `https://vkmuzpremium-stars-payments.husniddin2006yil.workers.dev`. Используйте URL, который Wrangler действительно покажет после публикации.
 
-6. Откройте `https://vkmuzpremium-stars-payments.husniddin2006yil.workers.dev/setup`. В защищённой HTTPS-форме укажите токен, сначала проверьте текущий webhook и число ожидающих обновлений. Нажимайте кнопку подключения только после того, как проверили старый адрес и готовы переключить бота на новый сервер. Это заменит поток обновлений webhook; прежний сервер и функции бота могут перестать работать. Ожидающие обновления не удаляются.
+6. Проверьте `https://YOUR-WORKER-URL/health`. `configured: true` означает, что Worker видит и D1, и секрет `BOT_TOKEN`.
 
-7. Разверните файлы сайта через Cloudflare Pages (или текущий хостинг) и внесите адрес сайта в настройки Mini App через BotFather. Настоящий Stars-счёт открывается внутри Telegram.
+7. Только после этого откройте `https://YOUR-WORKER-URL/setup`, проверьте текущий webhook и ожидающие обновления. Подключение заменит прежний webhook бота; старый сервер и его функции, включая поиск музыки, могут перестать работать. Не переключайте webhook, пока не будете готовы к этому. Ожидающие обновления не удаляются.
 
-## Проверка и безопасность
+## Mini App и Cloudflare Pages
 
-- Сначала тестируйте через официальный тестовый режим Telegram и тестового бота. На рабочем боте списываются настоящие Stars. Вызов `getMe` проверяет токен и имя бота, но не проверяет платёж.
-- Не помещайте токен в публичный GitHub, JavaScript сайта, журналы или открытые Cloudflare-переменные. Используйте Cloudflare Worker **Secret**.
-- Файл `.env` исключён из Git; `.env.example` не содержит секрета. Если токен уже был опубликован в чате или другом месте, отзовите его через BotFather (`/revoke`) и создайте новый.
-- Перед переключением webhook проверьте его текущий адрес через `/setup` и убедитесь, что готовы к возможной остановке старого обработчика.
+Для статического сайта в Cloudflare Pages выберите Framework preset `None`, Build command `exit 0`, Build output directory `.`, Production branch `main`; Root directory оставьте пустым. Убедитесь, что `PAYMENTS_API_URL` в `../app.js` совпадает с фактическим URL Worker, затем укажите URL Pages как адрес Mini App в BotFather. Счёт Telegram Stars открывается внутри Telegram.
 
-## Адреса Worker
+## Безопасность и тестирование
 
-- `GET /health` — общая проверка Worker и настроек.
+- Сначала тестируйте через тестового бота и тестовую среду Telegram. На рабочем боте списываются настоящие Stars.
+- Если токен уже отправлялся в чат или публиковался, отзовите его через BotFather (`/revoke`) и создайте новый перед добавлением в Cloudflare.
+- Команда `/health` проверяет доступность Worker и его конфигурацию; `getMe` проверяет токен и имя бота, но не проводит платёж.
+- Не активируйте webhook, не проверив его текущий адрес и не оценив влияние на старый сервер бота.
+
+## Маршруты Worker
+
+- `GET /health` — состояние Worker и конфигурации.
 - `POST /api/create-invoice` — создание счёта после проверки подписи Telegram `initData`.
 - `POST /api/status` — получение статуса подписки.
 - `POST /api/cancel` — отключение автопродления.
 - `POST /telegram/webhook` — обработка `pre_checkout_query`, платежей и команд бота.
-- `GET /setup` — просмотр и подключение webhook после подтверждения владельцем.
-- `GET /terms` — условия подписки и поддержка.
+- `GET /setup` — защищённая страница проверки и подключения webhook.
+- `GET /terms` — условия подписки.

@@ -6,4 +6,4 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "vkmuzpremium_stars"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "40242619-57f6-48d3-ade6-50402707dde1"
